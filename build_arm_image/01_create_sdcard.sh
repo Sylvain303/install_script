@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 #
 # Create the sdcard on your PC with the latest debian raspbian.
 #
@@ -7,7 +7,7 @@
 #  ./01_create_sdcard.sh generated_yunohost.img /dev/sdcard_device
 #
 # HowTo:
-#  find your sdcard device: 
+#  find your sdcard device:
 #     mount it first graphicaly
 #     next issue a df -h look for something "/dev/mmcblk0p1"
 #  create a totally new image:
@@ -17,7 +17,7 @@
 # Status: functional
 # Licence: GPLv3
 # Author: sylvain303@github
-# SeeAlso: 
+# SeeAlso:
 
 # informations about Raspbian image:
 # Raspbian Jessie Lite Version: November 2015 Release date: 2015-11-21
@@ -128,7 +128,11 @@ dd_to_sdcard() {
     [[ -z "$SDCARD" ]] && { echo '$SDCARD is empty refusing to run'; return; }
     # ensure that sdcard partitions are unmounted with umount_sdcard_partition
     echo "starting dd it will take some times…"
-    sudo dd bs=16M if="$DEBIAN_IMG" of=$SDCARD
+    sudo dd \
+        status=progress \
+        bs=16M \
+        if="$DEBIAN_IMG" \
+        of=$SDCARD
     sudo sync
 }
 

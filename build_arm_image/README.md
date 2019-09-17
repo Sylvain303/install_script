@@ -150,3 +150,6 @@ This script requier root privilege to run and modify the local sdcard image.
 
 ## See also
 * https://github.com/likeitneverwentaway/rpi_buildbot
+* https://github.com/Drewsif/PiShrink
+* https://medium.com/platformer-blog/creating-a-custom-raspbian-os-image-for-production-3fcb43ff3630
+* https://kmdouglass.github.io/posts/create-a-custom-raspbian-image-with-pi-gen-part-1/

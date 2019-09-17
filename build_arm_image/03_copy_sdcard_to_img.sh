@@ -72,8 +72,12 @@ dd_from_sdcard() {
     then
         count="count=$1"
     fi
+    echo "starting d d if=$SDCARD  of=_build_arm_steps/$OUTPUT_IMG"
     # ensure that sdcard partitions are unmounted with umount_sdcard_partition
-    sudo dd bs=16M if=$SDCARD of=_build_arm_steps/$OUTPUT_IMG $count
+    sudo dd bs=16M \
+      status=progress \
+      if=$SDCARD \
+      of=_build_arm_steps/$OUTPUT_IMG $count
 }
 
 test_all_tools() {
@@ -90,7 +94,7 @@ mount_sdcard_data_partition() {
     sudo mount ${SDCARD}p2 _build_arm_steps/sdcard
 }
 
-# prototype, not used. Wanna test if I can d.d only used part of the partion, and fix it back on the PC
+# prototype, not used. Wanna test if I can dd only used part of the partion, and fix it back on the PC
 # not working yet, may be not achieved anyway…
 get_used_partition_size() {
     local start_offset=$(sudo fdisk -l /dev/mmcblk0 | awk '/Linux/ { print $2 * 512 }')
@@ -135,9 +139,11 @@ main() {
     fi
     # reading script argument
     SDCARD=$(get_top_device "$1")
-    OUTPUT_IMG="$(date "+%Y-%m-%d")_yunohost_rasbian-jessie.img"
+    DEST=cleandrop_RPI
+    OUTPUT_IMG="$(date "+%Y-%m-%d")_${DEST}.img"
 
     # actions loop
+    local s
     for s in $STEPS
     do
         echo -n "$s: "
