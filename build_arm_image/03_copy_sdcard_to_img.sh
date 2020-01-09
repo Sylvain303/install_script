@@ -5,15 +5,17 @@
 # Usage:
 #  ./03_copy_sdcard_to_img.sh /dev/sdcard_device
 #
-# the resulting image will be stored in _build_arm_steps
+# the resulting image will be stored in $OUTPUT_DIR
 #
 # Status: prototype
 # Licence: GPLv3
 # Author: sylvain303@github
 
+OUTPUT_DIR=/media/sylvain/USBDISK/cleandrop
+
 die() {
-    echo "$*"
-    exit 1
+    1>&2 echo "$*"
+    kill $$
 }
 
 # helper, test if a shell program exists in PATH
@@ -28,6 +30,11 @@ test_tool() {
     fi
 }
 
+decho()
+{
+    >&2 echo "$*"
+}
+
 # helper, try to guess top device name
 # /dev/sdp2 => /dev/sdp
 # /dev/mmcblk0p1 => /dev/mmcblk0
@@ -39,12 +46,14 @@ get_top_device() {
 
     if [[ "$device" =~ $regexp1 ]]
     then
-        #echo sd
+        decho sd
         device="${device/[0-9]/}"
     elif [[ "$device" =~ $regexp2 ]]
     then
-        #echo mmcblk
+        decho mmcblk
         device="${device/p[0-9]/}"
+    else
+      die "cannot match device: '$device' must be sdcard device name"
     fi
 
     echo "$device"
@@ -72,12 +81,12 @@ dd_from_sdcard() {
     then
         count="count=$1"
     fi
-    echo "starting d d if=$SDCARD  of=_build_arm_steps/$OUTPUT_IMG"
+    echo "starting dd if=$SDCARD  of=$OUTPUT_DIR/$OUTPUT_IMG"
     # ensure that sdcard partitions are unmounted with umount_sdcard_partition
     sudo dd bs=16M \
       status=progress \
       if=$SDCARD \
-      of=_build_arm_steps/$OUTPUT_IMG $count
+      of=$OUTPUT_DIR/$OUTPUT_IMG $count
 }
 
 test_all_tools() {
@@ -90,15 +99,15 @@ test_all_tools() {
 # debug, not used
 mount_sdcard_data_partition() {
     local part_data=2
-    [[ ! -d _build_arm_steps/sdcard ]] && mkdir _build_arm_steps/sdcard
-    sudo mount ${SDCARD}p2 _build_arm_steps/sdcard
+    [[ ! -d $OUTPUT_DIR/sdcard ]] && mkdir $OUTPUT_DIR/sdcard
+    sudo mount ${SDCARD}p2 $OUTPUT_DIR/sdcard
 }
 
 # prototype, not used. Wanna test if I can dd only used part of the partion, and fix it back on the PC
 # not working yet, may be not achieved anyway…
 get_used_partition_size() {
     local start_offset=$(sudo fdisk -l /dev/mmcblk0 | awk '/Linux/ { print $2 * 512 }')
-    local used=$(df -B1 _build_arm_steps/sdcard | awk '/dev.mmcblk0p2/ { print $3 }')
+    local used=$(df -B1 $OUTPUT_DIR/sdcard | awk '/dev.mmcblk0p2/ { print $3 }')
 
     echo "start_offset=$start_offset"
     echo "used        =$used"
@@ -111,16 +120,24 @@ get_used_partition_size() {
 }
 
 shrink_img() {
-    echo "shrinking _build_arm_steps/$OUTPUT_IMG"
-    sudo ./autosizer.sh _build_arm_steps/$OUTPUT_IMG
+    echo "shrinking $OUTPUT_DIR/$OUTPUT_IMG"
+    sudo ./autosizer.sh $OUTPUT_DIR/$OUTPUT_IMG
+}
+
+compress_image() {
+  [[ -z "$OUTPUT_IMG" ]] && { echo '$OUTPUT_IMG is empty refusing to run'; return 1; }
+  time pigz -9 "$OUTPUT_IMG"
+  ls -lh "$OUTPUT_IMG*"
 }
 
 # functions call in that order, edit remove a long running step if already done or if
-# you want to skip it, step states are saved in folder _build_arm_steps and skipped automatically.
+# you want to skip it, step states are saved in folder $OUTPUT_DIR and skipped automatically.
 STEPS="
 umount_sdcard_partition
 dd_from_sdcard
-shrink_img"
+shrink_img
+compress_image
+"
 
 # main wrapper, so the script can be sourced for debuging purpose or unittesting
 main() {
@@ -133,9 +150,9 @@ main() {
     fi
 
     test_all_tools dd sync sudo losetup
-    if [[ ! -d _build_arm_steps ]]
+    if [[ ! -d $OUTPUT_DIR ]]
     then
-        die "cannot find _build_arm_steps/ folder are you following build step?"
+        die "cannot find $OUTPUT_DIR/ folder are you following build step?"
     fi
     # reading script argument
     SDCARD=$(get_top_device "$1")
@@ -159,5 +176,5 @@ then
     main "$@"
 else
     # just print STEPS so I can copy/paste to call them interactivly
-    echo $STEPS
+    echo "$STEPS"
 fi

@@ -30,10 +30,11 @@
 # SHA_DEBIAN_IMG_ZIP need to be updated to match your image
 DOWNLOAD_URL=https://www.raspberrypi.org/downloads/raspbian/
 SHA_DEBIAN_IMG_ZIP="6741a30d674d39246302a791f1b7b2b0c50ef9b7"
+DD_BS=16M
 
 die() {
-    echo "$*"
-    exit 1
+    1>&2 echo "$*"
+    kill $$
 }
 
 # helper, test if a shell program exists in PATH
@@ -130,7 +131,7 @@ dd_to_sdcard() {
     echo "starting dd it will take some times…"
     sudo dd \
         status=progress \
-        bs=16M \
+        bs=$DD_BS \
         if="$DEBIAN_IMG" \
         of=$SDCARD
     sudo sync
@@ -185,18 +186,18 @@ add_ssh_key_to_img() {
     echo "ssh-key added"
 }
 
-# functions call in that order, edit remove a long running step if already done or if
-# you want to skip it, step states are saved in folder _build_arm_steps and skipped automatically.
-# STEPS is modifiy in main() if argument1 is an .img and not a .zip
-STEPS="
-sha_verify_zip
-unzip_img
-add_ssh_key_to_img
-umount_sdcard_partition
-dd_to_sdcard"
+# introduced for cleandrop ~8 min
+copy_gziped_image_to_sdcard()
+{
+  local image=$1
+  fail_if_empty image SDCARD
+  gzip -dc $image | sudo dd status=progress bs=$DD_BS of=$SDCARD
+  echo "============ syncing devices"
+  time sudo sync
+}
 
-# main wrapper, so the script can be sourced for debuging purpose or unittesting
-main() {
+check_raspbian_argument()
+{
     # positional argument must be script argument.
     # init
     if [[ -z "$1" ]]
@@ -221,19 +222,69 @@ main() {
     else
         [[ -f "$DEBIAN_IMG_ZIP" ]] || die "error raspbian image not found: '$DEBIAN_IMG_ZIP'"
     fi
+}
 
+# stop_script is the main function which kill INT (Ctrl-C) your script
+# it doesn't exit because you can source it too.
+# you don't have to call this function unless you extend some fail_if function
+stop_script() {
+  # test whether you are in interactive shell or not
+  if [[ $- == *i* ]]
+  then
+    # autokill INT myself = STOP
+    kill -INT $$
+  else
+    exit $1
+  fi
+}
+
+fail_if_empty() {
+  local varname
+  local v
+  # allow multiple check on the same line
+  for varname in $*
+  do
+    eval "v=\$$varname"
+    if [[ -z "$v" ]] ; then
+      echo "error: $varname empty or unset at ${BASH_SOURCE[1]}:${FUNCNAME[1]} line ${BASH_LINENO[0]}"
+      stop_script 4
+    fi
+  done
+}
+# functions call in that order, edit remove a long running step if already done or if
+# you want to skip it, step states are saved in folder _build_arm_steps and skipped automatically.
+# STEPS is modifiy in main() if argument1 is an .img and not a .zip
+#STEPS="
+#sha_verify_zip
+#unzip_img
+#add_ssh_key_to_img
+#umount_sdcard_partition
+#dd_to_sdcard"
+
+STEPS='
+umount_sdcard_partition
+copy_gziped_image_to_sdcard $SD_IMAGE
+'
+
+# main wrapper, so the script can be sourced for debuging purpose or unittesting
+main() {
+    SD_IMAGE=$1
     SDCARD=$(get_top_device "$2")
     [[ -z "$SDCARD" ]] && die "argument 2 error: expecting sdcard_device"
+    fail_if_empty SD_IMAGE SDCARD
 
-    test_all_tools dd sync sudo losetup ssh-keygen
+    test_all_tools dd sync sudo losetup ssh-keygen pv
     mkdir -p _build_arm_steps
 
     # actions loop
+    oldIFS=$IFS
+    IFS=$'\n'
     for s in $STEPS
     do
         echo -n "$s: "
-        eval $s
+        time eval $s
     done
+    IFS=$oldIFS
 }
 
 # sourcing code detection, if code is sourced for debug purpose, main is not executed.
@@ -244,5 +295,5 @@ then
     main "$@"
 else
     # just print STEPS so I can copy/paste to call them interactivly
-    echo $STEPS
+    echo "$STEPS"
 fi
