@@ -126,8 +126,10 @@ shrink_img() {
 
 compress_image() {
   [[ -z "$OUTPUT_IMG" ]] && { echo '$OUTPUT_IMG is empty refusing to run'; return 1; }
-  time pigz -9 "$OUTPUT_IMG"
-  ls -lh "$OUTPUT_IMG*"
+  local img=$OUTPUT_DIR/$OUTPUT_IMG
+  echo "compress_image: '$img'"
+  time pigz -9 "$img"
+  ls -lh "$img*"
 }
 
 # functions call in that order, edit remove a long running step if already done or if
